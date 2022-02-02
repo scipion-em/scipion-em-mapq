@@ -49,8 +49,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(mapqConst.MAPQ_HOME, 'chimera-1.13.1')
-        cls._defineEmVar(mapqConst.MAPQ_HOME, 'chimera_headless')
+        cls._defineEmVar(mapqConst.MAPQ_HOME, 'chimera-%s' % mapqConst.V1_16_1)
 
     @classmethod
     def getEnviron(cls):
