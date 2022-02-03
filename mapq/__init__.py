@@ -117,8 +117,7 @@ class Plugin(pwem.Plugin):
         chimera_cmds.append(("cd .. && python %s %s" % (getchimera_script, version),
                              "../chimera-%s-linux_x86_64.bin" % version))
         chimera_cmds.append(("chmod +x ../chimera-%s-linux_x86_64.bin && "
-                             "../chimera-%s-linux_x86_64.bin && "
-                             "ln -s ~/.local/UCSF-Chimera64-1.16/ chimera"
+                             "printf './chimera\\nno\\n\\n' | ../chimera-%s-linux_x86_64.bin"
                              % (version, version),
                              "chimera"))
 
