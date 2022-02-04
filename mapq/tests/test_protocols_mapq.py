@@ -23,3 +23,66 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+
+from os.path import join
+import numpy as np
+
+from pwem.protocols import ProtImportPdb, ProtImportVolumes
+from pwem.convert.atom_struct import AtomicStructHandler
+
+from pyworkflow.tests import BaseTest, setupTestProject
+
+from mapq.protocols import ProtMapQ
+import mapq
+
+
+class TestMapQ(BaseTest):
+    """This class check if MapQ protocol works properly"""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.pdb = join(mapq.Plugin.getHome('QScore_Apoferritin_Tutorial'), '3ajo_fitted_refined.pdb')
+        cls.map = join(mapq.Plugin.getHome('QScore_Apoferritin_Tutorial'), 'emd20026_prot.mrc')
+
+    def runImportPDBs(cls, label):
+        """ Run an Import particles protocol. """
+        protImport = cls.newProtocol(ProtImportPdb,
+                                     inputPdbData=1,
+                                     pdbFile=cls.pdb,
+                                     objLabel=label)
+        cls.launchProtocol(protImport)
+        return protImport.outputPdb
+
+    def runImportVolumes(cls, samplingRate, label):
+        """ Run an Import particles protocol. """
+        protImport = cls.newProtocol(ProtImportVolumes,
+                                     filesPath=cls.map, samplingRate=samplingRate, objLabel=label)
+        cls.launchProtocol(protImport)
+        return protImport.outputVolume
+
+    def runMapQ(self, pdb, volume):
+        prot = self.newProtocol(ProtMapQ, inputVol=volume, pdbs=[pdb])
+        self.launchProtocol(prot)
+        self.assertIsNotNone(prot.scoredStructures,
+                             "There was a problem with MapQ protocol output")
+        return prot
+
+    def test_mapq(self):
+        pdb = self.runImportPDBs('PDB Struct')
+        volume = self.runImportVolumes(0.65, 'Map')
+        prot = self.runMapQ(pdb, volume)
+
+        ASH = AtomicStructHandler()
+        for struct in prot.scoredStructures:
+            fileName = struct.getFileName()
+            fields = ASH.readLowLevel(fileName)
+            attributes = fields["_scipion_attributes.name"]
+            values = fields["_scipion_attributes.value"]
+            mapq_scores = [float(value) for attribute, value in zip(attributes, values)
+                           if attribute == prot._ATTRNAME]
+            mean_score = sum(mapq_scores) / len(mapq_scores)
+        self.assertEqual(mean_score, 0.0, "Unexpected score value: mean")
+
+        return prot

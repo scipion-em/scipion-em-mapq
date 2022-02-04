@@ -126,6 +126,9 @@ class Plugin(pwem.Plugin):
         chimera_cmds.append(('unzip mapq_1_8_2.zip', "mapq"))
         chimera_cmds.append(("cd mapq && python install.py ../chimera &&"
                              "touch ../mapq_installed", "mapq_installed"))
+        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/data/QScore_Apoferritin_Tutorial.zip',
+                             'QScore_Apoferritin_Tutorial.zip'))
+        chimera_cmds.append(('unzip QScore_Apoferritin_Tutorial.zip', "QScore_Apoferritin_Tutorial"))
 
         env.addPackage('chimera', version=version,
                        tar=VOID_TGZ,
