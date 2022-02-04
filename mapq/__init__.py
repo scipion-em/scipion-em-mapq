@@ -72,6 +72,10 @@ class Plugin(pwem.Plugin):
         return str(cls.getHome('chimera'))
 
     @classmethod
+    def getChimeraProgram(cls):
+        return cls.getChimeraPath() + "/bin/chimera"
+
+    @classmethod
     def getMapQProgram(cls):
         """ Return the program binary that will be used. """
         cmd = cls.getHome('mapq', 'mapq_cmd.py')

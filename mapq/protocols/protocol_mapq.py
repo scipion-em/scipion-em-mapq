@@ -25,14 +25,14 @@
 # **************************************************************************
 
 from os.path import abspath
-from glob import glob
+import numpy as np
 
 from pwem.convert import toCIF, Ccp4Header
 from pwem.convert.atom_struct import toPdb, AtomicStructHandler, addScipionAttribute
 from pwem.objects import SetOfAtomStructs, AtomStruct
 from pwem.protocols import ProtAnalysis3D
 
-from pyworkflow.protocol import PointerParam, FloatParam, MultiPointerParam, IntParam
+from pyworkflow.protocol import PointerParam, FloatParam, MultiPointerParam, IntParam, BooleanParam
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 
@@ -67,6 +67,9 @@ class ProtMapQ(ProtAnalysis3D):
         form.addParam('sigma', FloatParam, allowsNull=True,
                       label="Sigma",
                       help="Optional – default is 0.6 – specifies width of reference Gaussian in Å ")
+        form.addParam('autoFit', BooleanParam, default=True, label="Auto fit map and structures?",
+                      help="If true, the map and structures will be automatically aligned with Chimera. "
+                           "Otherwise, map and structures will be assumed to be aligned")
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ------------------------
@@ -79,8 +82,9 @@ class ProtMapQ(ProtAnalysis3D):
     def convertInputStep(self):
         volFile = self.inputVol.get().getFileName()
         sampling = self.inputVol.get().getSamplingRate()
+        origin = self.inputVol.get().getShiftsFromOrigin()
         self.volOutFile = abspath(self._getExtraPath('map.mrc'))
-        Ccp4Header.fixFile(volFile, self.volOutFile, (0, 0, 0), sampling,
+        Ccp4Header.fixFile(volFile, self.volOutFile, origin, sampling,
                            Ccp4Header.START)
 
         self.pdbOutFile = []
@@ -88,12 +92,23 @@ class ProtMapQ(ProtAnalysis3D):
             pdbFile = pdb.get().getFileName()
             baseName = pwutils.removeBaseExt(pdbFile)
             self.pdbOutFile.append(abspath(self._getExtraPath('%s.pdb' % baseName)))
-            if pwutils.getExt(pdbFile) == ".pdb":
-                h = AtomicStructHandler()
-                h.read(pdbFile)
-                h.writeAsPdb(self.pdbOutFile[-1])
-            else:
-                toPdb(pdbFile, self.pdbOutFile[-1])
+            h = AtomicStructHandler()
+            h.read(pdbFile)
+            self.moveOriginTo([0, 0, 0], h)
+            h.writeAsPdb(self.pdbOutFile[-1])
+
+            if self.autoFit.get():
+                print("Fitting %s into map..." % baseName)
+                scriptFile = self._getTmpPath("fitting.py")
+                fhCmd = open(scriptFile, 'w')
+                fhCmd.write("import chimera\n")
+                fhCmd.write("from chimera import runCommand\n")
+                fhCmd.write("runCommand('open %s')\n" % self.pdbOutFile[-1])
+                fhCmd.write("runCommand('open %s')\n" % self.volOutFile)
+                fhCmd.write("runCommand('fitmap #0 #1')\n")
+                fhCmd.write("runCommand('write relative #1 #0 %s')\n" % self.pdbOutFile[-1])
+                args = "--nogui --script %s" % scriptFile
+                self.runJob(mapq.Plugin.getChimeraProgram(), args)
 
     def computeQScoresStep(self):
         args = '%s %s ' % (mapq.Plugin.getChimeraPath(), self.volOutFile)
@@ -117,10 +132,11 @@ class ProtMapQ(ProtAnalysis3D):
         outStructFileBase = self._getExtraPath('{}.cif')
         ASH = AtomicStructHandler()
         outSet = SetOfAtomStructs.create(self._getPath())
-        for pdbFile in self.pdbOutFile:
+        for pdb in self.pdbs:
+            pdbFile = pdb.get().getFileName()
             baseName = pwutils.removeBaseExt(pdbFile)
             outStructFileName = outStructFileBase.format(baseName)
-            ASH.read(glob(self._getExtraPath(baseName + "*.pdb"))[1])
+            ASH.read(self._getExtraPath(baseName + "__Q__map.pdb"))
             mapQ_dict = {'{}:{}'.format(atom.full_id[2], atom.serial_number): str(round(atom.bfactor, 4))
                          for atom in ASH.getStructure().get_atoms()}
             inpAS = toCIF(pdbFile, outStructFileName)
@@ -135,6 +151,14 @@ class ProtMapQ(ProtAnalysis3D):
         self._defineOutputs(scoredStructures=outSet)
         for pdb in self.pdbs:
             self._defineSourceRelation(pdb, outSet)
+
+    # --------------------------- UTILS functions -------------------------------
+    def moveOriginTo(self, newOrigin, handler):
+        centerMass = handler.centerOfMass(geometric=True)
+        for atom in handler.getStructure().get_atoms():
+            coords = atom.get_coord()
+            atom.coord = coords + np.asarray(newOrigin) - np.asarray(centerMass)
+
 
     # --------------------------- INFO functions ------------------------------
     def _methods(self):
