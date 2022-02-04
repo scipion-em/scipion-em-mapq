@@ -25,12 +25,14 @@
 # **************************************************************************
 
 from os.path import abspath
+from glob import glob
 
-from pwem.emlib.image import ImageHandler
-from pwem.objects import FSC, Volume
+from pwem.convert import toCIF, Ccp4Header
+from pwem.convert.atom_struct import toPdb, AtomicStructHandler, addScipionAttribute
+from pwem.objects import SetOfAtomStructs, AtomStruct
 from pwem.protocols import ProtAnalysis3D
 
-from pyworkflow.protocol import PointerParam, FloatParam, MultiPointerParam
+from pyworkflow.protocol import PointerParam, FloatParam, MultiPointerParam, IntParam
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 
@@ -43,6 +45,8 @@ class ProtMapQ(ProtAnalysis3D):
     """
     _label = 'compute q-scores'
     _devStatus = BETA
+    _ATTRNAME = "MapQ_Score"
+    _OUTNAME = "scoredStructures"
 
     # --------------------------- DEFINE param functions ------------------------
     def _defineParams(self, form):
@@ -56,7 +60,7 @@ class ProtMapQ(ProtAnalysis3D):
                       label = "Map resolution",
                       help = "Optional - Default is 3.0 - Specifies resolution of map; it is used to output perresidue "
                              "statistics along with expected Q-score at this resolution")
-        form.addParam('bFactor', FloatParam, allowsNull=True,
+        form.addParam('bFactor', IntParam, allowsNull=True,
                       label="B-factor",
                       help="Optional - If specified, a separate pdb file will be "
                            "written where bfactor=N*(1-Qscore) for each atom.")
@@ -74,14 +78,22 @@ class ProtMapQ(ProtAnalysis3D):
     # --------------------------- STEPS functions -------------------------------
     def convertInputStep(self):
         volFile = self.inputVol.get().getFileName()
-        self.volOutFile = abspath(self._getExtraPath('map' + pwutils.getExt(volFile)))
-        pwutils.copyFile(volFile, self.volOutFile)
+        sampling = self.inputVol.get().getSamplingRate()
+        self.volOutFile = abspath(self._getExtraPath('map.mrc'))
+        Ccp4Header.fixFile(volFile, self.volOutFile, (0, 0, 0), sampling,
+                           Ccp4Header.START)
 
         self.pdbOutFile = []
-        for idp, pdb in enumerate(self.pdbs):
+        for pdb in self.pdbs:
             pdbFile = pdb.get().getFileName()
-            self.pdbOutFile.append(abspath(self._getExtraPath('pdb_%d' % (idp + 1) + pwutils.getExt(pdbFile))))
-            pwutils.copyFile(pdbFile, self.pdbOutFile[-1])
+            baseName = pwutils.removeBaseExt(pdbFile)
+            self.pdbOutFile.append(abspath(self._getExtraPath('%s.pdb' % baseName)))
+            if pwutils.getExt(pdbFile) == ".pdb":
+                h = AtomicStructHandler()
+                h.read(pdbFile)
+                h.writeAsPdb(self.pdbOutFile[-1])
+            else:
+                toPdb(pdbFile, self.pdbOutFile[-1])
 
     def computeQScoresStep(self):
         args = '%s %s ' % (mapq.Plugin.getChimeraPath(), self.volOutFile)
@@ -91,7 +103,7 @@ class ProtMapQ(ProtAnalysis3D):
             args += " res=%f" % self.mapRes.get()
 
         if self.bFactor.get():
-            args += ' bfactor=%f' % self.bFactor.get()
+            args += ' bfactor=%d' % self.bFactor.get()
 
         if self.sigma.get():
             args += ' sigma=%f' % self.sigma.get()
@@ -102,7 +114,27 @@ class ProtMapQ(ProtAnalysis3D):
         self.runJob(python_file, mapq_file + " " + args)
 
     def createOutputStep(self):
-        pass
+        outStructFileBase = self._getExtraPath('{}.cif')
+        ASH = AtomicStructHandler()
+        outSet = SetOfAtomStructs.create(self._getPath())
+        for pdbFile in self.pdbOutFile:
+            baseName = pwutils.removeBaseExt(pdbFile)
+            outStructFileName = outStructFileBase.format(baseName)
+            ASH.read(glob(self._getExtraPath(baseName + "*.pdb"))[1])
+            mapQ_dict = {'{}:{}'.format(atom.full_id[2], atom.serial_number): str(round(atom.bfactor, 4))
+                         for atom in ASH.getStructure().get_atoms()}
+            inpAS = toCIF(pdbFile, outStructFileName)
+            cifDic = ASH.readLowLevel(inpAS)
+            cifDic = addScipionAttribute(cifDic, mapQ_dict, self._ATTRNAME)
+            ASH._writeLowLevel(outStructFileName, cifDic)
+
+            outAS = AtomStruct()
+            outAS.setFileName(outStructFileName)
+            outSet.append(outAS.clone())
+
+        self._defineOutputs(scoredStructures=outSet)
+        for pdb in self.pdbs:
+            self._defineSourceRelation(pdb, outSet)
 
     # --------------------------- INFO functions ------------------------------
     def _methods(self):
@@ -115,11 +147,16 @@ class ProtMapQ(ProtAnalysis3D):
         if not self.isFinished():
             summary.append("QScores not ready yet.")
 
-        # if self.getOutputsSize() >= 1:
-        #     stdout = self._getLogsPath('run.stdout')
-        #     with open(stdout) as file:
-        #         for num, line in enumerate(file, 1):
-        #             if 'Resolution at 1 % FDR-FSC' in line:
-        #                 res = [float(s) for s in line.split() if s.replace(".", "", 1).isdigit()][1]
-        #     summary.append('Resolution at 1 %% FDR-FSC: %.2f Angstrom' % res)
+        if self.getOutputsSize() >= 1:
+            summary.append("*Mean Q-Scores:*")
+            ASH = AtomicStructHandler()
+            for struct in self.scoredStructures:
+                fileName = struct.getFileName()
+                fields = ASH.readLowLevel(fileName)
+                attributes = fields["_scipion_attributes.name"]
+                values = fields["_scipion_attributes.value"]
+                mapq_scores = [float(value) for attribute, value in zip(attributes, values)
+                               if attribute == self._ATTRNAME]
+                mean_score = sum(mapq_scores) / len(mapq_scores)
+                summary.append("      - %s --> %.4f" % (pwutils.removeBaseExt(fileName), mean_score))
         return summary
