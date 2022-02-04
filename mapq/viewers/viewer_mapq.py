@@ -23,3 +23,23 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+from pwem.viewers import ChimeraAttributeViewer
+from ..protocols import ProtMapQ
+
+class MapQScoresViewer(ChimeraAttributeViewer):
+    """ Viewer for attribute RMSD score of an AtomStruct.
+      Includes visualization in chimera and in histograms"""
+    _targets = [ProtMapQ]
+    _label = 'Atomic structure attributes viewer'
+
+    def __init__(self, **kwargs):
+      super().__init__(**kwargs)
+
+    def _defineParams(self, form):
+      super()._defineParams(form)
+      # Overwrite defaults
+      from pwem.wizards.wizard import ColorScaleWizardBase
+      group = form.addGroup('Color settings')
+      ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=2, defaultIntervals=21,
+                                                  defaultColorMap='RdBu')

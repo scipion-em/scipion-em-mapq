@@ -23,3 +23,5 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+from .viewer_mapq import MapQScoresViewer
