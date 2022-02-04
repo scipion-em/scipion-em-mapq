@@ -83,6 +83,6 @@ class TestMapQ(BaseTest):
             mapq_scores = [float(value) for attribute, value in zip(attributes, values)
                            if attribute == prot._ATTRNAME]
             mean_score = sum(mapq_scores) / len(mapq_scores)
-        self.assertEqual(mean_score, 0.0, "Unexpected score value: mean")
+        self.assertEqual(round(mean_score, 4), -0.0052, "Unexpected score value: mean")
 
         return prot
