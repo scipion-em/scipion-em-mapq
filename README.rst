@@ -45,7 +45,7 @@ To check the installation, simply run one of the following Scipion tests:
 
 .. code-block::
 
-   TODO
+   scipion tests mapq.tests.test_protocols_mapq.TestMapQ
 
 A complete list of tests can also be seen by executing ``scipion test --show --grep mapq``
 
