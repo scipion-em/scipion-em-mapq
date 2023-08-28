@@ -141,7 +141,7 @@ class ProtMapQ(ProtAnalysis3D):
                          for atom in ASH.getStructure().get_atoms()}
             inpAS = toCIF(pdbFile, outStructFileName)
             cifDic = ASH.readLowLevel(inpAS)
-            cifDic = addScipionAttribute(cifDic, mapQ_dict, self._ATTRNAME)
+            cifDic = addScipionAttribute(cifDic, mapQ_dict, self._ATTRNAME, recipient = 'atoms')
             ASH._writeLowLevel(outStructFileName, cifDic)
 
             outAS = AtomStruct()
