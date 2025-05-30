@@ -125,7 +125,7 @@ class Plugin(pwem.Plugin):
                              % (version, version),
                              "chimera"))
 
-        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/download/mapq_1_8_2.zip',
+        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/refs/heads/master/download/old/mapq_1_8_2.zip',
                              'mapq_1_8_2.zip'))
         chimera_cmds.append(('unzip mapq_1_8_2.zip', "mapq"))
         chimera_cmds.append(("cd mapq && python install.py ../chimera &&"
