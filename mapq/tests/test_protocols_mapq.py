@@ -58,7 +58,7 @@ class TestMapQ(BaseTest):
     def runImportVolumes(cls, samplingRate, label):
         """ Run an Import particles protocol. """
         protImport = cls.newProtocol(ProtImportVolumes,
-                                     filesPath=cls.map, samplingRate=samplingRate, objLabel=label)
+                                     filesPath=cls.map, samplingRate=samplingRate, objLabel=label, setOrigCoord=True, x=-117.0, y=-65.6500015258789, z=-101.399993896484)
         cls.launchProtocol(protImport)
         return protImport.outputVolume
 
@@ -83,6 +83,6 @@ class TestMapQ(BaseTest):
             mapq_scores = [float(value) for attribute, value in zip(attributes, values)
                            if attribute == prot._ATTRNAME]
             mean_score = sum(mapq_scores) / len(mapq_scores)
-        self.assertEqual(round(mean_score, 4), -0.0052, "Unexpected score value: mean")
+        self.assertEqual(round(mean_score, 4), 0.8776, "Unexpected score value: mean")
 
         return prot
