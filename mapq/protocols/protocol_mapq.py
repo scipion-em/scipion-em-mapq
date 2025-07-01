@@ -87,28 +87,31 @@ class ProtMapQ(ProtAnalysis3D):
         Ccp4Header.fixFile(volFile, self.volOutFile, origin, sampling,
                            Ccp4Header.START)
 
+        self.cifOutFile = []
         self.pdbOutFile = []
         for pdb in self.pdbs:
-            pdbFile = pdb.get().getFileName()
-            baseName = pwutils.removeBaseExt(pdbFile)
+            cifFile = pdb.get().getFileName()
+            baseName = pwutils.removeBaseExt(cifFile)
+            self.cifOutFile.append(abspath(self._getExtraPath('%s.cif' % baseName)))  #############################
             self.pdbOutFile.append(abspath(self._getExtraPath('%s.pdb' % baseName)))
-            h = AtomicStructHandler()
-            h.read(pdbFile)
-            self.moveOriginTo([0, 0, 0], h)
-            h.writeAsPdb(self.pdbOutFile[-1])
 
+            h = AtomicStructHandler()
+            h.read(cifFile)
+            h.writeAsCif(self.cifOutFile[-1])
+
+            #### CHIMERAX
             if self.autoFit.get():
                 print("Fitting %s into map..." % baseName)
                 scriptFile = self._getTmpPath("fitting.py")
-                fhCmd = open(scriptFile, 'w')
-                fhCmd.write("import chimera\n")
-                fhCmd.write("from chimera import runCommand\n")
-                fhCmd.write("runCommand('open %s')\n" % self.pdbOutFile[-1])
-                fhCmd.write("runCommand('open %s')\n" % self.volOutFile)
-                fhCmd.write("runCommand('fitmap #0 #1')\n")
-                fhCmd.write("runCommand('write relative #1 #0 %s')\n" % self.pdbOutFile[-1])
+                with open(scriptFile, 'w') as fhCmd:  # Using 'with' ensures the file is properly closed
+                    fhCmd.write("from chimerax.core.commands import run\n")
+                    fhCmd.write("run(session, 'open %s')\n" % self.cifOutFile[-1])
+                    fhCmd.write("run(session, 'open %s')\n" % self.volOutFile)
+                    fhCmd.write("run(session, 'fitmap #1 inMap #2')\n")
+                    fhCmd.write("run(session, 'save %s models #1 relModel #2')\n" % self.pdbOutFile[-1])
+                    fhCmd.write("run(session, 'exit')\n")  # Ensure ChimeraX exits after running the script
                 args = "--nogui --script %s" % scriptFile
-                self.runJob(mapq.Plugin.getChimeraProgram(), args)
+                self.runJob(mapq.Plugin.getChimeraXProgram(), args)
 
     def computeQScoresStep(self):
         args = '%s %s ' % (mapq.Plugin.getChimeraPath(), self.volOutFile)

@@ -31,6 +31,7 @@ import pwem
 import pyworkflow.utils as pwutils
 
 import mapq.constants as mapqConst
+import glob
 
 __version__ = "1.0.0"
 _logo = "mapq_logo.png"
@@ -74,6 +75,18 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getChimeraProgram(cls):
         return cls.getChimeraPath() + "/bin/chimera"
+
+    @classmethod
+    def getChimeraXPath(cls):
+        em_folder = os.path.dirname(os.path.dirname(str(cls.getHome('chimera'))))
+        print(f'\nem folder folder: {em_folder}\n')
+        chimerax_folder = glob.glob(os.path.join(em_folder, 'chimerax*'))[0]  # Get the first match
+        print(f'\nChimerax folder: {chimerax_folder}\n')
+        return chimerax_folder
+
+    @classmethod
+    def getChimeraXProgram(cls):
+        return cls.getChimeraXPath() + "/bin/ChimeraX"
 
     @classmethod
     def getMapQProgram(cls):
