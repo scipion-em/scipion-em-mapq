@@ -26,6 +26,7 @@
 
 from os.path import abspath
 import numpy as np
+import pandas as pd
 
 from pwem.convert import toCIF, Ccp4Header
 from pwem.convert.atom_struct import toPdb, AtomicStructHandler, addScipionAttribute
@@ -139,9 +140,9 @@ class ProtMapQ(ProtAnalysis3D):
             pdbFile = pdb.get().getFileName()
             baseName = pwutils.removeBaseExt(pdbFile)
             outStructFileName = outStructFileBase.format(baseName)
-            ASH.read(self._getExtraPath(baseName + "__Q__map.pdb"))
-            mapQ_dict = {'{}:{}'.format(atom.full_id[2], atom.serial_number): str(round(atom.bfactor, 4))
-                         for atom in ASH.getStructure().get_atoms()}
+            mapq_pdb = self._getExtraPath(baseName + ".pdb__Q__map.mrc.pdb")
+            ASH.read(mapq_pdb)
+            mapQ_dict = self.createMapQDict(mapq_pdb)
             inpAS = toCIF(pdbFile, outStructFileName)
             cifDic = ASH.readLowLevel(inpAS)
             cifDic = addScipionAttribute(cifDic, mapQ_dict, self._ATTRNAME, recipient = 'atoms')
@@ -162,6 +163,21 @@ class ProtMapQ(ProtAnalysis3D):
             coords = atom.get_coord()
             atom.coord = coords + np.asarray(newOrigin) - np.asarray(centerMass)
 
+    def createMapQDict(self, mapq_pdb):
+        colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26), (26, 27),
+                    (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78), (78, 80)]
+        names = ['type', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
+                 'icode', 'x', 'y', 'z', 'occupancy', 'Q_score', 'element', 'charge']
+
+        pdb = pd.read_fwf(mapq_pdb, names=names, colspecs=colspecs)
+        df_atoms = pdb[pdb[pdb.columns[0]].isin(['ATOM', 'HETATM'])]
+        df_atoms = df_atoms.reset_index(drop=True)
+
+        mapQ_dict = {
+            f"{row['chainid']}:{int(row['serial'])}": str(row['Q_score'])
+            for _, row in df_atoms.iterrows()
+        }
+        return mapQ_dict
 
     # --------------------------- INFO functions ------------------------------
     def _methods(self):
