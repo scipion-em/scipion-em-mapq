@@ -137,10 +137,9 @@ class Plugin(pwem.Plugin):
                              "printf './chimera\\nno\\n\\n' | ../chimera-%s-linux_x86_64.bin"
                              % (version, version),
                              "chimera"))
-
-        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/download/mapq_1_8_2.zip',
-                             'mapq_1_8_2.zip'))
-        chimera_cmds.append(('unzip mapq_1_8_2.zip', "mapq"))
+        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/download/mapq_v2.9.7.zip',
+                             'mapq_v2.9.7.zip'))
+        chimera_cmds.append(('unzip mapq_v2.9.7.zip', "mapq"))
         chimera_cmds.append(("cd mapq && python install.py ../chimera &&"
                              "touch ../mapq_installed", "mapq_installed"))
         chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/data/QScore_Apoferritin_Tutorial.zip',
