@@ -30,6 +30,7 @@ import numpy as np
 
 from pwem.protocols import ProtImportPdb, ProtImportVolumes
 from pwem.convert.atom_struct import AtomicStructHandler
+import pwem.convert as emconv
 
 from pyworkflow.tests import BaseTest, setupTestProject
 
@@ -47,7 +48,7 @@ class TestMapQ(BaseTest):
         cls.map = join(mapq.Plugin.getHome('QScore_Apoferritin_Tutorial'), 'emd20026_prot.mrc')
 
     def runImportPDBs(cls, label):
-        """ Run an Import particles protocol. """
+        """ Run an Import atomic structure protocol. """
         protImport = cls.newProtocol(ProtImportPdb,
                                      inputPdbData=1,
                                      pdbFile=cls.pdb,
@@ -56,9 +57,11 @@ class TestMapQ(BaseTest):
         return protImport.outputPdb
 
     def runImportVolumes(cls, samplingRate, label):
-        """ Run an Import particles protocol. """
+        """ Run an Import volume protocol. """
+        ccp4header = emconv.Ccp4Header(cls.map, readHeader=True)
+        x, y, z = ccp4header.getOrigin(changeSign=True)
         protImport = cls.newProtocol(ProtImportVolumes,
-                                     filesPath=cls.map, samplingRate=samplingRate, objLabel=label, setOrigCoord=True, x=-117.0, y=-65.6500015258789, z=-101.399993896484)
+                                     filesPath=cls.map, samplingRate=samplingRate, objLabel=label, setOrigCoord=True, x=x, y=y, z=z)
         cls.launchProtocol(protImport)
         return protImport.outputVolume
 
