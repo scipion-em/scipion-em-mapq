@@ -79,9 +79,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getChimeraXPath(cls):
         em_folder = os.path.dirname(os.path.dirname(str(cls.getHome('chimera'))))
-        print(f'\nem folder folder: {em_folder}\n')
         chimerax_folder = glob.glob(os.path.join(em_folder, 'chimerax*'))[0]  # Get the first match
-        print(f'\nChimerax folder: {chimerax_folder}\n')
         return chimerax_folder
 
     @classmethod
