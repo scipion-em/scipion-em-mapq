@@ -78,7 +78,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getChimeraXPath(cls):
-        em_folder = os.path.dirname(os.path.dirname(str(cls.getHome('chimera'))))
+        em_folder = pwem.Config.EM_ROOT
         chimerax_folder = glob.glob(os.path.join(em_folder, 'chimerax*'))[0]  # Get the first match
         return chimerax_folder
 
