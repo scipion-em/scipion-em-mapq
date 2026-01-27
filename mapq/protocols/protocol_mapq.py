@@ -26,6 +26,7 @@
 
 from os.path import abspath
 import numpy as np
+import pandas as pd
 
 from pwem.convert import toCIF, Ccp4Header
 from pwem.convert.atom_struct import toPdb, AtomicStructHandler, addScipionAttribute
@@ -87,28 +88,31 @@ class ProtMapQ(ProtAnalysis3D):
         Ccp4Header.fixFile(volFile, self.volOutFile, origin, sampling,
                            Ccp4Header.START)
 
+        self.cifOutFile = []
         self.pdbOutFile = []
         for pdb in self.pdbs:
-            pdbFile = pdb.get().getFileName()
-            baseName = pwutils.removeBaseExt(pdbFile)
+            cifFile = pdb.get().getFileName()
+            baseName = pwutils.removeBaseExt(cifFile)
+            self.cifOutFile.append(abspath(self._getExtraPath('%s.cif' % baseName)))  #############################
             self.pdbOutFile.append(abspath(self._getExtraPath('%s.pdb' % baseName)))
-            h = AtomicStructHandler()
-            h.read(pdbFile)
-            self.moveOriginTo([0, 0, 0], h)
-            h.writeAsPdb(self.pdbOutFile[-1])
 
+            h = AtomicStructHandler()
+            h.read(cifFile)
+            h.writeAsCif(self.cifOutFile[-1])
+
+            #### CHIMERAX
             if self.autoFit.get():
                 print("Fitting %s into map..." % baseName)
                 scriptFile = self._getTmpPath("fitting.py")
-                fhCmd = open(scriptFile, 'w')
-                fhCmd.write("import chimera\n")
-                fhCmd.write("from chimera import runCommand\n")
-                fhCmd.write("runCommand('open %s')\n" % self.pdbOutFile[-1])
-                fhCmd.write("runCommand('open %s')\n" % self.volOutFile)
-                fhCmd.write("runCommand('fitmap #0 #1')\n")
-                fhCmd.write("runCommand('write relative #1 #0 %s')\n" % self.pdbOutFile[-1])
+                with open(scriptFile, 'w') as fhCmd:  # Using 'with' ensures the file is properly closed
+                    fhCmd.write("from chimerax.core.commands import run\n")
+                    fhCmd.write("run(session, 'open %s')\n" % self.cifOutFile[-1])
+                    fhCmd.write("run(session, 'open %s')\n" % self.volOutFile)
+                    fhCmd.write("run(session, 'fitmap #1 inMap #2')\n")
+                    fhCmd.write("run(session, 'save %s models #1 relModel #2')\n" % self.pdbOutFile[-1])
+                    fhCmd.write("run(session, 'exit')\n")  # Ensure ChimeraX exits after running the script
                 args = "--nogui --script %s" % scriptFile
-                self.runJob(mapq.Plugin.getChimeraProgram(), args)
+                self.runJob(mapq.Plugin.getChimeraXProgram(), args)
 
     def computeQScoresStep(self):
         args = '%s %s ' % (mapq.Plugin.getChimeraPath(), self.volOutFile)
@@ -136,9 +140,9 @@ class ProtMapQ(ProtAnalysis3D):
             pdbFile = pdb.get().getFileName()
             baseName = pwutils.removeBaseExt(pdbFile)
             outStructFileName = outStructFileBase.format(baseName)
-            ASH.read(self._getExtraPath(baseName + "__Q__map.pdb"))
-            mapQ_dict = {'{}:{}'.format(atom.full_id[2], atom.serial_number): str(round(atom.bfactor, 4))
-                         for atom in ASH.getStructure().get_atoms()}
+            mapq_pdb = self._getExtraPath(baseName + ".pdb__Q__map.mrc.pdb")
+            ASH.read(mapq_pdb)
+            mapQ_dict = self.createMapQDict(mapq_pdb)
             inpAS = toCIF(pdbFile, outStructFileName)
             cifDic = ASH.readLowLevel(inpAS)
             cifDic = addScipionAttribute(cifDic, mapQ_dict, self._ATTRNAME, recipient = 'atoms')
@@ -159,6 +163,21 @@ class ProtMapQ(ProtAnalysis3D):
             coords = atom.get_coord()
             atom.coord = coords + np.asarray(newOrigin) - np.asarray(centerMass)
 
+    def createMapQDict(self, mapq_pdb):
+        colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26), (26, 27),
+                    (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78), (78, 80)]
+        names = ['type', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
+                 'icode', 'x', 'y', 'z', 'occupancy', 'Q_score', 'element', 'charge']
+
+        pdb = pd.read_fwf(mapq_pdb, names=names, colspecs=colspecs)
+        df_atoms = pdb[pdb[pdb.columns[0]].isin(['ATOM', 'HETATM'])]
+        df_atoms = df_atoms.reset_index(drop=True)
+
+        mapQ_dict = {
+            f"{row['chainid']}:{int(row['serial'])}": str(row['Q_score'])
+            for _, row in df_atoms.iterrows()
+        }
+        return mapQ_dict
 
     # --------------------------- INFO functions ------------------------------
     def _methods(self):

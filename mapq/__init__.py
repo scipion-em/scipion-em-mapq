@@ -31,6 +31,7 @@ import pwem
 import pyworkflow.utils as pwutils
 
 import mapq.constants as mapqConst
+import glob
 
 __version__ = "1.0.0"
 _logo = "mapq_logo.png"
@@ -74,6 +75,16 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getChimeraProgram(cls):
         return cls.getChimeraPath() + "/bin/chimera"
+
+    @classmethod
+    def getChimeraXPath(cls):
+        em_folder = pwem.Config.EM_ROOT
+        chimerax_folder = glob.glob(os.path.join(em_folder, 'chimerax*'))[0]  # Get the first match
+        return chimerax_folder
+
+    @classmethod
+    def getChimeraXProgram(cls):
+        return cls.getChimeraXPath() + "/bin/ChimeraX"
 
     @classmethod
     def getMapQProgram(cls):
@@ -124,10 +135,9 @@ class Plugin(pwem.Plugin):
                              "printf './chimera\\nno\\n\\n' | ../chimera-%s-linux_x86_64.bin"
                              % (version, version),
                              "chimera"))
-
-        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/refs/heads/master/download/old/mapq_1_8_2.zip',
-                             'mapq_1_8_2.zip'))
-        chimera_cmds.append(('unzip mapq_1_8_2.zip', "mapq"))
+        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/download/mapq_v2.9.7.zip',
+                             'mapq_v2.9.7.zip'))
+        chimera_cmds.append(('unzip mapq_v2.9.7.zip', "mapq"))
         chimera_cmds.append(("cd mapq && python install.py ../chimera &&"
                              "touch ../mapq_installed", "mapq_installed"))
         chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/data/QScore_Apoferritin_Tutorial.zip',
