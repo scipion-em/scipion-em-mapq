@@ -26,7 +26,6 @@
 
 from os.path import abspath
 import numpy as np
-import pandas as pd
 
 from pwem.convert import toCIF, Ccp4Header
 from pwem.convert.atom_struct import toPdb, AtomicStructHandler, addScipionAttribute
@@ -164,20 +163,33 @@ class ProtMapQ(ProtAnalysis3D):
             atom.coord = coords + np.asarray(newOrigin) - np.asarray(centerMass)
 
     def createMapQDict(self, mapq_pdb):
-        colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26), (26, 27),
-                    (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78), (78, 80)]
-        names = ['type', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
-                 'icode', 'x', 'y', 'z', 'occupancy', 'Q_score', 'element', 'charge']
-
-        pdb = pd.read_fwf(mapq_pdb, names=names, colspecs=colspecs)
-        df_atoms = pdb[pdb[pdb.columns[0]].isin(['ATOM', 'HETATM'])]
-        df_atoms = df_atoms.reset_index(drop=True)
-
-        mapQ_dict = {
-            f"{row['chainid']}:{int(row['serial'])}": str(row['Q_score'])
-            for _, row in df_atoms.iterrows()
-        }
-        return mapQ_dict
+            mapQ_dict = {}
+            
+            with open(mapq_pdb, 'r') as f:
+                for line in f:
+                    # El tipo de registro (ATOM/HETATM) está en los primeros 6 caracteres
+                    record_type = line[0:6].strip()
+                    
+                    if record_type in ['ATOM', 'HETATM']:
+                        try:
+                            # Extraemos los campos usando los índices definidos en tu colspecs original
+                            # chainid: posición 21 (índice 21:22)
+                            # serial: posición 6-11 (índice 6:11)
+                            # Q_score: posición 60-66 (índice 60:66)
+                            
+                            chain_id = line[21:22].strip()
+                            serial = line[6:11].strip()
+                            q_score = line[60:66].strip()
+                            
+                            # Creamos la llave con el formato "chainid:serial"
+                            key = f"{chain_id}:{int(serial)}"
+                            mapQ_dict[key] = q_score
+                            
+                        except (ValueError, IndexError):
+                            # En caso de que una línea esté mal formateada o vacía
+                            continue
+                            
+            return mapQ_dict
 
     # --------------------------- INFO functions ------------------------------
     def _methods(self):
