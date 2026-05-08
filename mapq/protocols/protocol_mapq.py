@@ -41,7 +41,182 @@ import mapq
 
 class ProtMapQ(ProtAnalysis3D):
     """
-    Compute Q-Scores using MapQ software.
+    Computes atomic Q-scores by comparing atomic structures against a
+    cryo-EM density map using MapQ.
+
+    AI Generated:
+
+    Compute Q-Scores (ProtMapQ) — User Manual
+        Overview
+
+        The Compute Q-Scores protocol evaluates how well one or more
+        atomic structures agree locally with an experimental cryo-EM
+        density map.
+
+        Its main purpose is to calculate per-atom Q-scores using the
+        MapQ software.
+
+        In structural biology workflows, Q-scores provide a local
+        measure of resolvability and model-to-map agreement. Higher
+        Q-scores generally indicate that atoms are better supported by
+        the experimental density.
+
+        From a biological perspective, this protocol helps identify
+        well-resolved regions, poorly supported residues, flexible
+        domains, and local inconsistencies between the atomic model and
+        the experimental map.
+
+        Inputs and General Workflow
+
+        The protocol requires:
+
+            - One input cryo-EM density map.
+            - One or more atomic structures.
+
+        Several optional parameters can also be provided:
+
+            - Map resolution
+            - B-factor scaling
+            - Sigma of the reference Gaussian
+            - Automatic fitting of structures into the map
+
+        During execution, the protocol performs three main stages:
+
+            1. Input conversion and preparation
+            2. Q-score computation with MapQ
+            3. Output generation with embedded per-atom scores
+
+        Input Preparation
+
+        The input map is first converted into a standardized MRC file.
+
+        During this step, the protocol preserves both:
+
+            - Sampling rate
+            - Origin coordinates
+
+        This is important because Q-score calculations are highly
+        sensitive to spatial consistency between map and atomic model.
+
+        Each input structure is converted into CIF format.
+
+        If automatic fitting is enabled, each structure is also fitted
+        into the map using ChimeraX before Q-score computation.
+
+        Automatic Fitting
+
+        When autoFit is enabled, the protocol performs an initial rigid
+        fit of each structure into the density map.
+
+        ChimeraX is used to:
+
+            - Open the structure
+            - Open the map
+            - Run fitmap
+            - Save the fitted structure
+
+        This option is useful when the input models are approximately
+        correct but not perfectly aligned with the density.
+
+        If the map and structures are already aligned, automatic fitting
+        can be disabled.
+
+        From a practical perspective, disabling fitting avoids
+        unnecessary geometric perturbation when structures have already
+        been carefully positioned.
+
+        Q-Score Computation
+
+        After input preparation, the protocol launches MapQ.
+
+        MapQ evaluates the local density surrounding every atom and
+        compares it with an idealized reference Gaussian profile.
+
+        The protocol can optionally use:
+
+            - Map resolution, which helps estimate expected Q-scores at
+              that resolution.
+            - Sigma, which controls the width of the reference Gaussian.
+            - B-factor scaling, which generates an auxiliary PDB where
+              atomic B-factors are proportional to 1 - Qscore.
+
+        Computation is parallelized using the number of selected CPU
+        threads.
+
+        Interpretation of Q-Scores
+
+        Q-scores are computed per atom.
+
+        In general:
+
+            - High Q-scores indicate strong local density support.
+            - Low Q-scores indicate weak density support, disorder, or
+              possible local modelling inaccuracies.
+
+        Biologically, low-scoring regions often correspond to flexible
+        loops, mobile domains, poorly resolved side chains, or
+        heterogeneous conformational states.
+
+        Conversely, highly ordered structural cores usually produce
+        higher Q-scores.
+
+        Output Generation
+
+        After MapQ finishes, the protocol reads the resulting scored PDB
+        files and extracts the per-atom Q-score values.
+
+        These values are then inserted into the output CIF files as
+        Scipion atom-level attributes.
+
+        The final output is a SetOfAtomStructs.
+
+        Each output structure preserves the original atomic model while
+        adding per-atom MapQ scores.
+
+        Outputs and Their Interpretation
+
+        The protocol generates one scored atomic structure for each
+        input model.
+
+        Each atom contains an associated attribute called:
+
+            MapQ_Score
+
+        This allows direct downstream analysis of local map agreement.
+
+        In addition, the protocol reports the mean Q-score for each
+        structure in the protocol summary.
+
+        Biologically, the mean Q-score provides a global estimate of
+        model-to-map consistency, while the per-atom values reveal local
+        structural reliability.
+
+        Practical Recommendations
+
+        In routine cryo-EM workflows, the protocol performs best when
+        structures are already approximately aligned to the density map.
+
+        Automatic fitting is useful for preliminary analyses, but when
+        accurate manual fitting has already been performed, disabling
+        autoFit may preserve intended structural placement.
+
+        Interpretation of Q-scores should always consider the nominal
+        map resolution. Lower local Q-scores do not necessarily imply
+        incorrect modelling, especially in flexible or heterogeneous
+        regions.
+
+        Visual inspection of low-scoring regions is strongly
+        recommended.
+
+        Final Perspective
+
+        For cryo-EM users, this protocol provides a quantitative link
+        between atomic modelling and experimental density quality.
+
+        Although computationally simple, Q-score analysis is
+        biologically valuable because it highlights which parts of a
+        model are strongly supported by the experimental map and which
+        parts require more cautious interpretation.
     """
     _label = 'compute q-scores'
     _devStatus = BETA
