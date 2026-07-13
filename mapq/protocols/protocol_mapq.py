@@ -114,19 +114,20 @@ class ProtMapQ(ProtAnalysis3D):
                 self.runJob(mapq.Plugin.getChimeraXProgram(), args)
 
     def computeQScoresStep(self):
-        args = '%s %s ' % (mapq.Plugin.getChimeraPath(), self.volOutFile)
-        args += " ".join(self.pdbOutFile)
+        args = f" {self.volOutFile}"
+        args += f" {mapq.Plugin.getChimeraPath()}"
+        args += f" {' '.join(self.pdbOutFile)}"
 
         if self.mapRes.get():
-            args += " res=%f" % self.mapRes.get()
+            args += f" res={self.mapRes.get()}"
 
         if self.bFactor.get():
-            args += ' bfactor=%d' % self.bFactor.get()
+            args += f" bfactor={self.bFactor.get()}"
 
         if self.sigma.get():
-            args += ' sigma=%f' % self.sigma.get()
+            args += f" sigma={self.sigma.get()}"
 
-        args += " np=%d" % self.numberOfThreads.get()
+        args += f" np={self.numberOfThreads.get()}"
 
         python_file, mapq_file = mapq.Plugin.getMapQProgram()
         self.runJob(python_file, mapq_file + " " + args)
