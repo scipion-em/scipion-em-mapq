@@ -101,6 +101,22 @@ class Plugin(pwem.Plugin):
         for ver in cls._supportedVersions:
             cls.addMapQPackage(env, ver, default = (ver == mapqConst.MAPQ_DEFAULT_VERSION))
 
+        MAPQ_CHIMERA_INSTALLED = f"mapq_chimera_{cls._currentVersion}_installed"
+        chimeraIntegrateCmd  = []
+        chimeraIntegrateCmd.append(f" cd {cls.getVar(mapqConst.MAPQ_HOME)} && ")
+        chimeraIntegrateCmd.append(f" python install.py {cls.getVar(mapqConst.MAPQ_CHIMERA_HOME)} && ")
+        chimeraIntegrateCmd.append(f" && touch ../{MAPQ_CHIMERA_INSTALLED}")
+        chimeraIntegrateCmd.append(('wget -c https://github.com/gregdp/mapq/raw/master/data/QScore_Apoferritin_Tutorial.zip',
+                             'QScore_Apoferritin_Tutorial.zip'))
+        chimeraIntegrateCmd.append(('unzip QScore_Apoferritin_Tutorial.zip', "QScore_Apoferritin_Tutorial"))
+
+        
+        chimeraCmds = [(chimeraIntegrateCmd ,MAPQ_CHIMERA_INSTALLED)]
+
+        env.addPackage(mapqConst.MAPQ_CHIMERA, version=cls._currentVersion,
+                       commands=chimeraCmds,
+                       default=False)
+
         # Note: ChimeraX and Chimera installation are NOT managed through this package
         # Advise the user to download and install them, and point to them through the 
         # EM Vars instead!
