@@ -51,6 +51,8 @@ class Plugin(pwem.Plugin):
     @classmethod
     def _defineVariables(cls):
         cls._defineEmVar(mapqConst.MAPQ_HOME, 'chimera-%s' % mapqConst.V1_16_1)
+        cls._defineEmVar(mapqConst.MAPQ_CHIMERA_HOME, '/usr/bin', "Chimera (OLD) with MAPQ installed")
+        cls._defineEmVar(mapqConst.MAPQ_CHIMERAX_HOME, '/usr/bin', "ChimeraX installation")
 
     @classmethod
     def getEnviron(cls):
@@ -70,7 +72,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getChimeraPath(cls):
-        return str(cls.getHome('chimera'))
+        chimera_home = cls.getVar(mapqConst.MAPQ_CHIMERA_HOME)
+        return chimera_home
 
     @classmethod
     def getChimeraProgram(cls):
@@ -78,9 +81,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getChimeraXPath(cls):
-        em_folder = pwem.Config.EM_ROOT
-        chimerax_folder = glob.glob(os.path.join(em_folder, 'chimerax*'))[0]  # Get the first match
-        return chimerax_folder
+        chimerax_home = cls.getVar(mapqConst.MAPQ_CHIMERAX_HOME)
+        return chimerax_home
 
     @classmethod
     def getChimeraXProgram(cls):
