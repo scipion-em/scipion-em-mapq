@@ -28,6 +28,7 @@ import os
 import mapq
 
 MAPQ = "mapq"
+MAPQ_CHIMERA = "mapq-chimera"
 
 MAPQ_HOME = 'MAPQ_HOME'
 MAPQ_CHIMERAX_HOME = 'MAPQ_CHIMERAX_HOME'
