@@ -132,32 +132,3 @@ class Plugin(pwem.Plugin):
                        version=version,
                        commands=installationCmds,
                        default=default)
-
-    @classmethod
-    def defineChimeraInstallation(cls, env, version, default=False):
-        from scipion.install.funcs import VOID_TGZ  # Local import to avoid having scipion-app installed when building the package.
-
-        getchimera_script = os.path.join(os.path.dirname(__file__),
-                                         "getchimera.py")
-
-        chimera_cmds = []
-        chimera_cmds.append(("cd .. && python %s %s" % (getchimera_script, version),
-                             "../chimera-%s-linux_x86_64.bin" % version))
-        chimera_cmds.append(("chmod +x ../chimera-%s-linux_x86_64.bin && "
-                             "printf './chimera\\nno\\n\\n' | ../chimera-%s-linux_x86_64.bin"
-                             % (version, version),
-                             "chimera"))
-        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/download/mapq_v2.9.7.zip',
-                             'mapq_v2.9.7.zip'))
-        chimera_cmds.append(('unzip mapq_v2.9.7.zip', "mapq"))
-        chimera_cmds.append(("cd mapq && python install.py ../chimera &&"
-                             "touch ../mapq_installed", "mapq_installed"))
-        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/data/QScore_Apoferritin_Tutorial.zip',
-                             'QScore_Apoferritin_Tutorial.zip'))
-        chimera_cmds.append(('unzip QScore_Apoferritin_Tutorial.zip', "QScore_Apoferritin_Tutorial"))
-
-        env.addPackage('chimera', version=version,
-                       tar=VOID_TGZ,
-                       default=default,
-                       commands=chimera_cmds,
-                       )
