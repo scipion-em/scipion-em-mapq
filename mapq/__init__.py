@@ -38,19 +38,16 @@ _logo = "mapq_logo.png"
 _references = ['Pintilie2020']
 _url = "https://github.com/scipion-em/scipion-em-mapq"
 
-
 SCRATCHDIR = pwutils.getEnvVariable('SPOCSCRATCHDIR', default='/tmp/')
 
-
 class Plugin(pwem.Plugin):
-    _homeVar = mapqConst.MAPQ_HOME
-    _pathVars = [mapqConst.MAPQ_HOME]
-    _supportedVersions = mapqConst.V1_16_1
-    _currentVersion = mapqConst.V1_16_1
+    _supportedVersions = [mapqConst.MAPQ_DEFAULT_VERSION]
+    _currentVersion = mapqConst.MAPQ_DEFAULT_VERSION
+    _fullversion = f"mapq-{_currentVersion}"
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(mapqConst.MAPQ_HOME, 'chimera-%s' % mapqConst.V1_16_1)
+        cls._defineEmVar(mapqConst.MAPQ_HOME, cls._fullversion)
         cls._defineEmVar(mapqConst.MAPQ_CHIMERA_HOME, '/usr/bin', "Chimera (OLD) with MAPQ installed")
         cls._defineEmVar(mapqConst.MAPQ_CHIMERAX_HOME, '/usr/bin', "ChimeraX installation")
 
@@ -96,32 +93,29 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def isVersionActive(cls):
-        return cls.getActiveVersion().startswith(mapqConst.V1_16_1)
+        return cls.getActiveVersion().startswith(mapqConst.MAPQ_DEFAULT_VERSION)
 
     @classmethod
     def defineBinaries(cls, env):
-        # from scipion.install.funcs import VOID_TGZ
+        # MapQ binaries
+        for ver in cls._supportedVersions:
+            cls.addMapQPackage(env, ver, default = (ver == mapqConst.MAPQ_DEFAULT_VERSION))
 
-        # cls.defineChimeraXInstallation(env, V1_1, default=True)
-        cls.defineChimeraInstallation(env, cls._currentVersion, default=True)
+        # Note: ChimeraX and Chimera installation are NOT managed through this package
+        # Advise the user to download and install them, and point to them through the 
+        # EM Vars instead!
 
-        # # Scipion plugin for chimera. It will depend on the version currently active
-        # pathToPlugin = os.path.join(os.path.dirname(__file__),
-        #                             "Bundles", "scipion")
-        # pathToBinary = cls.getProgram()
-        #
-        # activeVersion = mapqConst.V1_16_1
-        # installationFlagFile = "chimera-%s/installed-%s" % (activeVersion, activeVersion)
-        #
-        # installPluginsCommand = [("%s --nogui --exit " \
-        #                           "--cmd 'devel install %s' && touch %s" % (
-        #                           pathToBinary, pathToPlugin, installationFlagFile),
-        #                           [installationFlagFile])]
-        #
-        # env.addPackage('scipionchimera', version='1.3',
-        #                tar=VOID_TGZ,
-        #                default=True,
-        #                commands=installPluginsCommand)
+    @classmethod
+    def addMapQPackage(cls, env, version, default = False):
+        MAPQ_INSTALLED = f"mapq_{version}_installed"
+        installCmd = f"git clone https://github.com/gregdp/mapq {cls._fullversion} "
+        installCmd += f" touch {MAPQ_INSTALLED}"
+        installationCmds = [(installCmd, MAPQ_INSTALLED)]
+
+        env.addPackage(mapqConst.MAPQ,
+                       version=version,
+                       commands=installationCmds,
+                       default=default)
 
     @classmethod
     def defineChimeraInstallation(cls, env, version, default=False):
