@@ -41,6 +41,8 @@ _url = "https://github.com/scipion-em/scipion-em-mapq"
 SCRATCHDIR = pwutils.getEnvVariable('SPOCSCRATCHDIR', default='/tmp/')
 
 class Plugin(pwem.Plugin):
+    _homeVar = mapqConst.MAPQ_HOME
+    _pathVars = [mapqConst.MAPQ_HOME]
     _supportedVersions = [mapqConst.MAPQ_DEFAULT_VERSION]
     _currentVersion = mapqConst.MAPQ_DEFAULT_VERSION
     _fullversion = f"mapq-{_currentVersion}"
