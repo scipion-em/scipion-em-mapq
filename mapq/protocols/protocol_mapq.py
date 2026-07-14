@@ -45,7 +45,7 @@ class ProtMapQ(ProtAnalysis3D):
     """
     _label = 'compute q-scores'
     _devStatus = BETA
-    _ATTRNAME = "MapQ_Score"
+    _ATTRNAME = "bfactor"
     _OUTNAME = "scoredStructures"
 
     # --------------------------- DEFINE param functions ------------------------
@@ -56,7 +56,8 @@ class ProtMapQ(ProtAnalysis3D):
         form.addParam('pdbs', MultiPointerParam, pointerClass="AtomStruct", important=True,
                       label="Input structures",
                       help='PDBs to compare to input map')
-        form.addParam('mapRes', FloatParam, allowsNull=True,
+        form.addParam('mapRes', FloatParam, allowsNull=False,
+                      default=3.0,
                       label = "Map resolution",
                       help = "Optional - Default is 3.0 - Specifies resolution of map; it is used to output perresidue "
                              "statistics along with expected Q-score at this resolution")
@@ -75,7 +76,7 @@ class ProtMapQ(ProtAnalysis3D):
     # --------------------------- INSERT steps functions ------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.computeQScoresStep)
+        # self._insertFunctionStep(self.computeQScoresStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -------------------------------
@@ -93,44 +94,60 @@ class ProtMapQ(ProtAnalysis3D):
             cifFile = pdb.get().getFileName()
             baseName = pwutils.removeBaseExt(cifFile)
             self.cifOutFile.append(abspath(self._getExtraPath('%s.cif' % baseName)))  #############################
-            self.pdbOutFile.append(abspath(self._getExtraPath('%s.pdb' % baseName)))
+            self.pdbOutFile.append(abspath(self._getExtraPath('%s_qscore.cif' % baseName)))
 
             h = AtomicStructHandler()
             h.read(cifFile)
             h.writeAsCif(self.cifOutFile[-1])
 
-            #### CHIMERAX
+            self.runChimeraX(baseName)
+            
+
+    def runChimeraX(self, baseName):
+        cxc_scriptFile = self._getTmpPath(f"{baseName}_fitting.cxc")
+        py_scriptFile = self._getTmpPath(f"{baseName}_fitting.py")
+        qscore_file = abspath(self._getExtraPath(f"{baseName}.csv"))
+
+        with open(py_scriptFile, 'w') as fhCmd:
+            # Open model and map
+            fhCmd.write(
+"""
+from chimerax.atomic import AtomicStructure
+
+structures = [ model for model in session.models.list() if isinstance(model, AtomicStructure) ]
+
+if len(structures) != 1:
+    raise RuntimeError("Expected one atomic structure, found more!")
+
+structure = structures[0]
+                
+for atom in structure.atoms:
+    qscore = getattr(atom, "qscore", None)
+    if qscore is not None:
+        atom.bfactor = float(qscore)
+"""
+            )
+            
+        with open(cxc_scriptFile, 'w') as fh:
+            # Open inputs
+            fh.write(f"open {self.cifOutFile[-1]}\n")
+            fh.write(f"open {self.volOutFile}\n")
+            # Optional alignment
             if self.autoFit.get():
-                print("Fitting %s into map..." % baseName)
-                scriptFile = self._getTmpPath("fitting.py")
-                with open(scriptFile, 'w') as fhCmd:  # Using 'with' ensures the file is properly closed
-                    fhCmd.write("from chimerax.core.commands import run\n")
-                    fhCmd.write("run(session, 'open %s')\n" % self.cifOutFile[-1])
-                    fhCmd.write("run(session, 'open %s')\n" % self.volOutFile)
-                    fhCmd.write("run(session, 'fitmap #1 inMap #2')\n")
-                    fhCmd.write("run(session, 'save %s models #1 relModel #2')\n" % self.pdbOutFile[-1])
-                    fhCmd.write("run(session, 'exit')\n")  # Ensure ChimeraX exits after running the script
-                args = "--nogui --script %s" % scriptFile
-                self.runJob(mapq.Plugin.getChimeraXProgram(), args)
+                fh.write("volume #2 origin 0,0,0\n")
+                fh.write(f"fitmap #1 inMap #2 resolution 3.0 metric cam shift true rotate true\n")
+            # QScore assignment
+            fh.write(f"qscore #1 toVolume #2 useGui false assignAttr true logDetails false outputFile {qscore_file}\n")
+            # Copy qscore to bfactor
+            fh.write(f"runscript '{abspath(py_scriptFile)}'\n")
+            
+            fh.write(f"save {self.pdbOutFile[-1]} models #1\n")
+            fh.write("exit\n")
 
-    def computeQScoresStep(self):
-        args = f" {self.volOutFile}"
-        args += f" {mapq.Plugin.getChimeraPath()}"
-        args += f" {' '.join(self.pdbOutFile)}"
+        # Tell ChimeraX to run the script
+        args = f"--nogui --nocolor --script {cxc_scriptFile}"
+        self.runJob(mapq.Plugin.getChimeraXProgram(), args)
 
-        if self.mapRes.get():
-            args += f" res={self.mapRes.get()}"
-
-        if self.bFactor.get():
-            args += f" bfactor={self.bFactor.get()}"
-
-        if self.sigma.get():
-            args += f" sigma={self.sigma.get()}"
-
-        args += f" np={self.numberOfThreads.get()}"
-
-        python_file, mapq_file = mapq.Plugin.getMapQProgram()
-        self.runJob(python_file, mapq_file + " " + args)
 
     def createOutputStep(self):
         outStructFileBase = self._getExtraPath('{}.cif')
@@ -140,7 +157,7 @@ class ProtMapQ(ProtAnalysis3D):
             pdbFile = pdb.get().getFileName()
             baseName = pwutils.removeBaseExt(pdbFile)
             outStructFileName = outStructFileBase.format(baseName)
-            mapq_pdb = self._getExtraPath(baseName + ".pdb__Q__map.mrc.pdb")
+            mapq_pdb = self._getExtraPath(baseName + "_qscore.cif")
             ASH.read(mapq_pdb)
             mapQ_dict = self.createMapQDict(mapq_pdb)
             inpAS = toCIF(pdbFile, outStructFileName)
