@@ -26,6 +26,7 @@
 
 from os.path import abspath
 import numpy as np
+import csv
 
 from pwem.convert import toCIF, Ccp4Header
 from pwem.convert.atom_struct import toPdb, AtomicStructHandler, addScipionAttribute
@@ -87,6 +88,10 @@ class ProtMapQ(ProtAnalysis3D):
         self.volOutFile = abspath(self._getExtraPath('map.mrc'))
         Ccp4Header.fixFile(volFile, self.volOutFile, origin, sampling,
                            Ccp4Header.START)
+        
+        # Write the generic scripts that can be reused
+        self.generateQtoBScript()
+        self.generateTSVScript()
 
         self.cifOutFile = []
         self.pdbOutFile = []
@@ -100,21 +105,18 @@ class ProtMapQ(ProtAnalysis3D):
             h.read(cifFile)
             h.writeAsCif(self.cifOutFile[-1])
 
-            # Write the generic scripts that can be reused
-            self.generateQtoBScript()
-
-            self.runChimeraX(baseName)
+            self.generateQScores(baseName)
             
 
-    def runChimeraX(self, baseName):
-        cxcQscore = self._getChimeraMainScriptFile(baseName)
+    def generateQScores(self, baseName):
+        cxcQscoreFile = self._getChimeraMainScriptFile(baseName)
 
         # Generate the script that will align (if needed), calculate
         # the Q-Scores and save everything
-        self.generateQCoreScript(cxcQscore, self.cifOutFile[-1], baseName)
+        self.generateQCoreScript(cxcQscoreFile, self.cifOutFile[-1], baseName)
 
         # Tell ChimeraX to run the script
-        args = f"--nogui --nocolor --script {cxcQscore}"
+        args = f"--nogui --nocolor --script {cxcQscoreFile}"
         self.runJob(mapq.Plugin.getChimeraXProgram(), args)
 
     def createOutputStep(self):
@@ -127,7 +129,7 @@ class ProtMapQ(ProtAnalysis3D):
             outStructFileName = outStructFileBase.format(baseName)
             mapq_pdb = self._getExtraPath(f"{baseName}_qscore.cif")
             ASH.read(mapq_pdb)
-            mapQ_dict = self.createMapQDict(mapq_pdb)
+            mapQ_dict = self.createMapQDict(self._getQScoreTSV(baseName))
             inpAS = toCIF(pdbFile, outStructFileName)
             cifDic = ASH.readLowLevel(inpAS)
             cifDic = addScipionAttribute(cifDic, mapQ_dict, self._ATTRNAME, recipient = 'atoms')
@@ -164,6 +166,87 @@ for atom in structure.atoms:
 """
             )
 
+    def generateTSVScript(self):
+        py_scriptFile = self._getChimeraQtoBPythonFile()
+        with open(py_scriptFile, 'w') as fh:
+            # TSV dict generation script
+            fh.write(
+"""
+import csv
+import sys
+
+from chimerax.atomic import AtomicStructure
+
+def get_structure(session) -> AtomicStructure:
+    structures = [
+        model
+        for model in session.models.list()
+        if isinstance(model, AtomicStructure)
+    ]
+
+    if len(structures) != 1:
+        raise RuntimeError(
+            f"Expected exactly one atomic structure, found {len(structures)}"
+        )
+
+    return structures[0]
+
+def export_atom_qscores(session, output_path: str) -> None:
+    structure = get_structure(session)
+
+    scored = 0
+    missing = 0
+
+    with open(output_path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+
+        writer.writerow([
+            "chain_id",
+            "serial",
+            "residue_number",
+            "insertion_code",
+            "residue_name",
+            "atom_name",
+            "alt_loc",
+            "qscore",
+        ])
+
+        for atom in structure.atoms:
+            qscore = getattr(atom, "qscore", None)
+
+            if qscore is None:
+                missing += 1
+                continue
+
+            residue = atom.residue
+
+            writer.writerow([
+                residue.chain_id or "",
+                int(atom.serial_number),
+                int(residue.number),
+                residue.insertion_code or "",
+                residue.name,
+                atom.name,
+                atom.alt_loc or "",
+                float(qscore),
+            ])
+
+            scored += 1
+
+    session.logger.info(
+        f"Exported {scored} atomic Q-scores to {output_path}; "
+        f"{missing} atoms had no qscore"
+    )
+
+if len(sys.argv) != 2:
+    raise RuntimeError(
+        "Usage: export_atom_qscores.py OUTPUT_TSV"
+    )
+
+export_atom_qscores(session, sys.argv[1])
+"""
+            )
+
     def generateQCoreScript(self, fn, inCif, baseName):
         with open(fn, 'w') as fh:
             # Open inputs
@@ -176,7 +259,9 @@ for atom in structure.atoms:
             # QScore assignment
             fh.write(f"qscore #1 toVolume #2 useGui false assignAttr true logDetails false outputFile {self._getQScoreCSV(baseName)}\n")
             # Copy qscore to bfactor
-            fh.write(f"runscript '{abspath(self._getChimeraQtoBPythonFile())}'\n")
+            # fh.write(f"runscript '{abspath(self._getChimeraQtoBPythonFile())}'\n")
+            # Generate TSV for Scipion Dictionary generation
+            fh.write(f"runscript '{self._getChimeraExportPythonFile()}' '{self._getQScoreTSV(baseName)}'\n")
             
             fh.write(f"save {self.pdbOutFile[-1]} models #1\n")
             fh.write(f"save {self._getQScoreATTR(baseName)} attrName a:qscore models #1 modelIds false\n")
@@ -189,7 +274,22 @@ for atom in structure.atoms:
             coords = atom.get_coord()
             atom.coord = coords + np.asarray(newOrigin) - np.asarray(centerMass)
 
-    def createMapQDict(self, mapq_pdb):
+    def createMapQDict(self, atom_tsv):
+        mapq_dict = {}
+        with open(atom_tsv, newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            for row in reader:
+                try:
+                    chain_id = row["chain_id"].strip()
+                    serial = int(row["serial"])
+                    qscore = float(row["qscore"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                mapq_dict[f"{chain_id}:{serial}"] = qscore
+        return mapq_dict
+
+
+    def createMapQDictOld(self, mapq_pdb):
             mapQ_dict = {}
             
             with open(mapq_pdb, 'r') as f:
@@ -252,12 +352,9 @@ for atom in structure.atoms:
     
     def _getChimeraQtoBPythonFile(self):
         return self._getExtraPath(f"qscoretobfactor.py")
-    
-    def _getChimeraExportScriptFile(self, baseName):
-        return self._getExtraPath(f"{baseName}_export.cxc")
 
-    def _getChimeraExportPythonFile(self, baseName):
-        return self._getExtraPath(f"{baseName}_export.py")
+    def _getChimeraExportPythonFile(self):
+        return self._getExtraPath(f"exportTSV.py")
     
     def _getChimeraSessionFile(self, baseName):
         return self._getExtraPath(f"{baseName}.cxs")
