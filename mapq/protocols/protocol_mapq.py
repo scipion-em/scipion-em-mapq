@@ -108,7 +108,7 @@ class ProtMapQ(ProtAnalysis3D):
 
     def runChimeraX(self, baseName):
         cxc_scriptFile = self._getChimeraMainScriptFile(baseName)
-        py_scriptFile = self._getChimeraQtoBPythonFile(baseName)
+        py_scriptFile = self._getChimeraQtoBPythonFile()
         qscore_file = self._getQScoreCSV(baseName)
         attr_file = self._getQScoreATTR(baseName)
         session_file = self._getChimeraSessionFile(baseName)
