@@ -107,32 +107,14 @@ class ProtMapQ(ProtAnalysis3D):
             
 
     def runChimeraX(self, baseName):
-        cxc_scriptFile = self._getChimeraMainScriptFile(baseName)
-        py_scriptFile = self._getChimeraQtoBPythonFile()
-        qscore_file = self._getQScoreCSV(baseName)
-        attr_file = self._getQScoreATTR(baseName)
-        session_file = self._getChimeraSessionFile(baseName)
-            
-        with open(cxc_scriptFile, 'w') as fh:
-            # Open inputs
-            fh.write(f"open {self.cifOutFile[-1]}\n")
-            fh.write(f"open {self.volOutFile}\n")
-            # Optional alignment
-            if self.autoFit.get():
-                fh.write("volume #2 origin 0,0,0\n")
-                fh.write(f"fitmap #1 inMap #2 resolution 3.0 metric cam shift true rotate true\n")
-            # QScore assignment
-            fh.write(f"qscore #1 toVolume #2 useGui false assignAttr true logDetails false outputFile {qscore_file}\n")
-            # Copy qscore to bfactor
-            fh.write(f"runscript '{abspath(py_scriptFile)}'\n")
-            
-            fh.write(f"save {self.pdbOutFile[-1]} models #1\n")
-            fh.write(f"save {attr_file} attrName a:qscore models #1 modelIds false\n")
-            fh.write(f"save {session_file}\n")
-            fh.write("exit\n")
+        cxcQscore = self._getChimeraMainScriptFile(baseName)
+
+        # Generate the script that will align (if needed), calculate
+        # the Q-Scores and save everything
+        self.generateQCoreScript(cxcQscore, self.cifOutFile[-1], baseName)
 
         # Tell ChimeraX to run the script
-        args = f"--nogui --nocolor --script {cxc_scriptFile}"
+        args = f"--nogui --nocolor --script {cxcQscore}"
         self.runJob(mapq.Plugin.getChimeraXProgram(), args)
 
     def createOutputStep(self):
@@ -181,7 +163,26 @@ for atom in structure.atoms:
         atom.bfactor = float(qscore)
 """
             )
-    
+
+    def generateQCoreScript(self, fn, inCif, baseName):
+        with open(fn, 'w') as fh:
+            # Open inputs
+            fh.write(f"open {inCif}\n")
+            fh.write(f"open {self.volOutFile}\n")
+            # Optional alignment
+            if self.autoFit.get():
+                fh.write("volume #2 origin 0,0,0\n")
+                fh.write(f"fitmap #1 inMap #2 resolution 3.0 metric cam shift true rotate true\n")
+            # QScore assignment
+            fh.write(f"qscore #1 toVolume #2 useGui false assignAttr true logDetails false outputFile {self._getQScoreCSV(baseName)}\n")
+            # Copy qscore to bfactor
+            fh.write(f"runscript '{abspath(self._getChimeraQtoBPythonFile())}'\n")
+            
+            fh.write(f"save {self.pdbOutFile[-1]} models #1\n")
+            fh.write(f"save {self._getQScoreATTR(baseName)} attrName a:qscore models #1 modelIds false\n")
+            fh.write(f"save {self._getChimeraSessionFile(baseName)}\n")
+            fh.write("exit\n")
+
     def moveOriginTo(self, newOrigin, handler):
         centerMass = handler.centerOfMass(geometric=True)
         for atom in handler.getStructure().get_atoms():
