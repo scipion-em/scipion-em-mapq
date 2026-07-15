@@ -33,7 +33,7 @@ import pyworkflow.utils as pwutils
 import mapq.constants as mapqConst
 import glob
 
-__version__ = "2.0.0"
+__version__ = "4.0.0"
 _logo = "mapq_logo.png"
 _references = ['Pintilie2020']
 _url = "https://github.com/scipion-em/scipion-em-mapq"
