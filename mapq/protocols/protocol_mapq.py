@@ -100,15 +100,17 @@ class ProtMapQ(ProtAnalysis3D):
             h.read(cifFile)
             h.writeAsCif(self.cifOutFile[-1])
 
+            self.writeChimeraXMainScript()
+
             self.runChimeraX(baseName)
             
 
     def runChimeraX(self, baseName):
-        cxc_scriptFile = self._getExtraPath(f"{baseName}_fitting.cxc")
-        py_scriptFile = self._getExtraPath(f"{baseName}_fitting.py")
-        qscore_file = abspath(self._getExtraPath(f"{baseName}.csv"))
-        attr_file = abspath(self._getExtraPath(f"{baseName}.defattr"))
-        session_file = abspath(self._getExtraPath(f"{baseName}.cxs"))
+        cxc_scriptFile = self._getChimeraMainScriptFile(baseName)
+        py_scriptFile = self._getChimeraQtoBPythonFile(baseName)
+        qscore_file = self._getQScoreCSV(baseName)
+        attr_file = self._getQScoreATTR(baseName)
+        session_file = self._getChimeraSessionFile(baseName)
 
         with open(py_scriptFile, 'w') as fhCmd:
             # Open model and map
@@ -153,6 +155,7 @@ for atom in structure.atoms:
         self.runJob(mapq.Plugin.getChimeraXProgram(), args)
 
 
+
     def createOutputStep(self):
         outStructFileBase = self._getExtraPath('{}.cif')
         ASH = AtomicStructHandler()
@@ -161,7 +164,7 @@ for atom in structure.atoms:
             pdbFile = pdb.get().getFileName()
             baseName = pwutils.removeBaseExt(pdbFile)
             outStructFileName = outStructFileBase.format(baseName)
-            mapq_pdb = self._getExtraPath(baseName + "_qscore.cif")
+            mapq_pdb = self._getExtraPath(f"{baseName}_qscore.cif")
             ASH.read(mapq_pdb)
             mapQ_dict = self.createMapQDict(mapq_pdb)
             inpAS = toCIF(pdbFile, outStructFileName)
@@ -201,6 +204,10 @@ for atom in structure.atoms:
                             
                             chain_id = line[21:22].strip()
                             serial = line[6:11].strip()
+                            # Ojing McOjing: arriba hacemos el truco de guardar
+                            # el Q-Score en el campo B-Factor
+                            # TODO: in a future, replace this dirty technique with actually parsing
+                            # the defattr file saved from Chimera
                             q_score = line[60:66].strip()
                             
                             # Creamos la llave con el formato "chainid:serial"
@@ -237,3 +244,27 @@ for atom in structure.atoms:
                 mean_score = sum(mapq_scores) / len(mapq_scores)
                 summary.append("      - %s --> %.4f" % (pwutils.removeBaseExt(fileName), mean_score))
         return summary
+
+    def _getChimeraMainScriptFile(self, baseName):
+        return self._getExtraPath(f"{baseName}_main.cxc")
+    
+    def _getChimeraQtoBPythonFile(self):
+        return self._getExtraPath(f"qscoretobfactor.py")
+    
+    def _getChimeraExportScriptFile(self, baseName):
+        return self._getExtraPath(f"{baseName}_export.cxc")
+
+    def _getChimeraExportPythonFile(self, baseName):
+        return self._getExtraPath(f"{baseName}_export.py")
+    
+    def _getChimeraSessionFile(self, baseName):
+        return self._getExtraPath(f"{baseName}.cxs")
+    
+    def _getQScoreATTR(self, baseName):
+        return self._getExtraPath(f"{baseName}.defattr")
+    
+    def _getQScoreCSV(self, baseName):
+        return self._getExtraPath(f"{baseName}_qscores.csv")
+    
+    def _getQScoreTSV(self, baseName):
+        return self._getExtraPath(f"{baseName}_dict.tsv")
