@@ -45,7 +45,7 @@ class ProtMapQ(ProtAnalysis3D):
     """
     _label = 'compute q-scores'
     _devStatus = BETA
-    _ATTRNAME = "bfactor"
+    _ATTRNAME = "MapQ_Score"
     _OUTNAME = "scoredStructures"
 
     # --------------------------- DEFINE param functions ------------------------
@@ -104,9 +104,11 @@ class ProtMapQ(ProtAnalysis3D):
             
 
     def runChimeraX(self, baseName):
-        cxc_scriptFile = self._getTmpPath(f"{baseName}_fitting.cxc")
-        py_scriptFile = self._getTmpPath(f"{baseName}_fitting.py")
+        cxc_scriptFile = self._getExtraPath(f"{baseName}_fitting.cxc")
+        py_scriptFile = self._getExtraPath(f"{baseName}_fitting.py")
         qscore_file = abspath(self._getExtraPath(f"{baseName}.csv"))
+        attr_file = abspath(self._getExtraPath(f"{baseName}.defattr"))
+        session_file = abspath(self._getExtraPath(f"{baseName}.cxs"))
 
         with open(py_scriptFile, 'w') as fhCmd:
             # Open model and map
@@ -142,6 +144,8 @@ for atom in structure.atoms:
             fh.write(f"runscript '{abspath(py_scriptFile)}'\n")
             
             fh.write(f"save {self.pdbOutFile[-1]} models #1\n")
+            fh.write(f"save {attr_file} attrName a:qscore models #1 modelIds false\n")
+            fh.write(f"save {session_file}\n")
             fh.write("exit\n")
 
         # Tell ChimeraX to run the script
