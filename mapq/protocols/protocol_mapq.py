@@ -62,13 +62,6 @@ class ProtMapQ(ProtAnalysis3D):
                       label = "Map resolution",
                       help = "Optional - Default is 3.0 - Specifies resolution of map; it is used to output perresidue "
                              "statistics along with expected Q-score at this resolution")
-        form.addParam('bFactor', IntParam, allowsNull=True,
-                      label="B-factor",
-                      help="Optional - If specified, a separate pdb file will be "
-                           "written where bfactor=N*(1-Qscore) for each atom.")
-        form.addParam('sigma', FloatParam, allowsNull=True,
-                      label="Sigma",
-                      help="Optional – default is 0.6 – specifies width of reference Gaussian in Å ")
         form.addParam('autoFit', BooleanParam, default=True, label="Auto fit map and structures?",
                       help="If true, the map and structures will be automatically aligned with Chimera. "
                            "Otherwise, map and structures will be assumed to be aligned")
@@ -167,7 +160,7 @@ for atom in structure.atoms:
             )
 
     def generateTSVScript(self):
-        py_scriptFile = self._getChimeraQtoBPythonFile()
+        py_scriptFile = self._getChimeraExportPythonFile()
         with open(py_scriptFile, 'w') as fh:
             # TSV dict generation script
             fh.write(
