@@ -33,24 +33,25 @@ import pyworkflow.utils as pwutils
 import mapq.constants as mapqConst
 import glob
 
-__version__ = "1.0.0"
+__version__ = "4.0.0"
 _logo = "mapq_logo.png"
 _references = ['Pintilie2020']
 _url = "https://github.com/scipion-em/scipion-em-mapq"
 
-
 SCRATCHDIR = pwutils.getEnvVariable('SPOCSCRATCHDIR', default='/tmp/')
-
 
 class Plugin(pwem.Plugin):
     _homeVar = mapqConst.MAPQ_HOME
     _pathVars = [mapqConst.MAPQ_HOME]
-    _supportedVersions = mapqConst.V1_16_1
-    _currentVersion = mapqConst.V1_16_1
+    _supportedVersions = [mapqConst.MAPQ_DEFAULT_VERSION]
+    _currentVersion = mapqConst.MAPQ_DEFAULT_VERSION
+    _fullversion = f"mapq-{_currentVersion}"
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(mapqConst.MAPQ_HOME, 'chimera-%s' % mapqConst.V1_16_1)
+        cls._defineEmVar(mapqConst.MAPQ_HOME, cls._fullversion)
+        cls._defineEmVar(mapqConst.MAPQ_CHIMERA_HOME, '/usr/bin', "Chimera (OLD) with MAPQ installed")
+        cls._defineEmVar(mapqConst.MAPQ_CHIMERAX_HOME, '/usr/bin', "ChimeraX installation")
 
     @classmethod
     def getEnviron(cls):
@@ -70,7 +71,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getChimeraPath(cls):
-        return str(cls.getHome('chimera'))
+        chimera_home = cls.getVar(mapqConst.MAPQ_CHIMERA_HOME)
+        return chimera_home
 
     @classmethod
     def getChimeraProgram(cls):
@@ -78,9 +80,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getChimeraXPath(cls):
-        em_folder = pwem.Config.EM_ROOT
-        chimerax_folder = glob.glob(os.path.join(em_folder, 'chimerax*'))[0]  # Get the first match
-        return chimerax_folder
+        chimerax_home = cls.getVar(mapqConst.MAPQ_CHIMERAX_HOME)
+        return chimerax_home
 
     @classmethod
     def getChimeraXProgram(cls):
@@ -94,58 +95,42 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def isVersionActive(cls):
-        return cls.getActiveVersion().startswith(mapqConst.V1_16_1)
+        return cls.getActiveVersion().startswith(mapqConst.MAPQ_DEFAULT_VERSION)
 
     @classmethod
     def defineBinaries(cls, env):
-        # from scipion.install.funcs import VOID_TGZ
+        # MapQ binaries
+        for ver in cls._supportedVersions:
+            cls.addMapQPackage(env, ver, default = (ver == mapqConst.MAPQ_DEFAULT_VERSION))
 
-        # cls.defineChimeraXInstallation(env, V1_1, default=True)
-        cls.defineChimeraInstallation(env, cls._currentVersion, default=True)
+        MAPQ_CHIMERA_INSTALLED = f"mapq_chimera_{cls._currentVersion}_installed"
+        chimeraIntegrateCmd  = []
+        chimeraIntegrateCmd.append(f" cd {cls.getVar(mapqConst.MAPQ_HOME)} && ")
+        chimeraIntegrateCmd.append(f" python install.py {cls.getVar(mapqConst.MAPQ_CHIMERA_HOME)} && ")
+        chimeraIntegrateCmd.append(f" && touch ../{MAPQ_CHIMERA_INSTALLED}")
+        chimeraIntegrateCmd.append(('wget -c https://github.com/gregdp/mapq/raw/master/data/QScore_Apoferritin_Tutorial.zip',
+                             'QScore_Apoferritin_Tutorial.zip'))
+        chimeraIntegrateCmd.append(('unzip QScore_Apoferritin_Tutorial.zip', "QScore_Apoferritin_Tutorial"))
 
-        # # Scipion plugin for chimera. It will depend on the version currently active
-        # pathToPlugin = os.path.join(os.path.dirname(__file__),
-        #                             "Bundles", "scipion")
-        # pathToBinary = cls.getProgram()
-        #
-        # activeVersion = mapqConst.V1_16_1
-        # installationFlagFile = "chimera-%s/installed-%s" % (activeVersion, activeVersion)
-        #
-        # installPluginsCommand = [("%s --nogui --exit " \
-        #                           "--cmd 'devel install %s' && touch %s" % (
-        #                           pathToBinary, pathToPlugin, installationFlagFile),
-        #                           [installationFlagFile])]
-        #
-        # env.addPackage('scipionchimera', version='1.3',
-        #                tar=VOID_TGZ,
-        #                default=True,
-        #                commands=installPluginsCommand)
+        
+        chimeraCmds = [(chimeraIntegrateCmd ,MAPQ_CHIMERA_INSTALLED)]
+
+        env.addPackage(mapqConst.MAPQ_CHIMERA, version=cls._currentVersion,
+                       commands=chimeraCmds,
+                       default=False)
+
+        # Note: ChimeraX and Chimera installation are NOT managed through this package
+        # Advise the user to download and install them, and point to them through the 
+        # EM Vars instead!
 
     @classmethod
-    def defineChimeraInstallation(cls, env, version, default=False):
-        from scipion.install.funcs import VOID_TGZ  # Local import to avoid having scipion-app installed when building the package.
+    def addMapQPackage(cls, env, version, default = False):
+        MAPQ_INSTALLED = f"mapq_{version}_installed"
+        installCmd = f"git clone https://github.com/gregdp/mapq {cls._fullversion} "
+        installCmd += f" touch {MAPQ_INSTALLED}"
+        installationCmds = [(installCmd, MAPQ_INSTALLED)]
 
-        getchimera_script = os.path.join(os.path.dirname(__file__),
-                                         "getchimera.py")
-
-        chimera_cmds = []
-        chimera_cmds.append(("cd .. && python %s %s" % (getchimera_script, version),
-                             "../chimera-%s-linux_x86_64.bin" % version))
-        chimera_cmds.append(("chmod +x ../chimera-%s-linux_x86_64.bin && "
-                             "printf './chimera\\nno\\n\\n' | ../chimera-%s-linux_x86_64.bin"
-                             % (version, version),
-                             "chimera"))
-        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/download/mapq_v2.9.7.zip',
-                             'mapq_v2.9.7.zip'))
-        chimera_cmds.append(('unzip mapq_v2.9.7.zip', "mapq"))
-        chimera_cmds.append(("cd mapq && python install.py ../chimera &&"
-                             "touch ../mapq_installed", "mapq_installed"))
-        chimera_cmds.append(('wget -c https://github.com/gregdp/mapq/raw/master/data/QScore_Apoferritin_Tutorial.zip',
-                             'QScore_Apoferritin_Tutorial.zip'))
-        chimera_cmds.append(('unzip QScore_Apoferritin_Tutorial.zip', "QScore_Apoferritin_Tutorial"))
-
-        env.addPackage('chimera', version=version,
-                       tar=VOID_TGZ,
-                       default=default,
-                       commands=chimera_cmds,
-                       )
+        env.addPackage(mapqConst.MAPQ,
+                       version=version,
+                       commands=installationCmds,
+                       default=default)

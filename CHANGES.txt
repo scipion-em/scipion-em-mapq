@@ -1,3 +1,9 @@
+4.0.0
+    - Deprecate Chimera (old) and MapQ, now using ChimeraX and QScore plugin
+    - The plugin no longer installs Chimera/ChimeraX (see scipion-em-chimera)
+    - Added variables for Chimera location customization
+    - Added binaries to install the QScore plugin in your existing ChimeraX installation
+    - Completely redo the internal qscore management logic
 3.1.1 - multiple fixes for tomo protocols
 3.1.0:
     - changed version to reflect Scipion 3 support

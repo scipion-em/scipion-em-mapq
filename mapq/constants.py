@@ -27,7 +27,11 @@
 import os
 import mapq
 
-MAPQ_HOME = 'MAPQ_HOME'
+MAPQ = "mapq"
+MAPQ_CHIMERA = "mapq-chimera"
 
-# Supported stable versions
-V1_16_1 = '1.16'
+MAPQ_HOME = 'MAPQ_HOME'
+MAPQ_CHIMERAX_HOME = 'MAPQ_CHIMERAX_HOME'
+MAPQ_CHIMERA_HOME = 'MAPQ_CHIMERA_HOME'
+
+MAPQ_DEFAULT_VERSION = "git"
