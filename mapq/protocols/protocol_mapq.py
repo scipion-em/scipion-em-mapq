@@ -100,7 +100,8 @@ class ProtMapQ(ProtAnalysis3D):
             h.read(cifFile)
             h.writeAsCif(self.cifOutFile[-1])
 
-            self.writeChimeraXMainScript()
+            # Write the generic scripts that can be reused
+            self.generateQtoBScript()
 
             self.runChimeraX(baseName)
             
@@ -111,26 +112,6 @@ class ProtMapQ(ProtAnalysis3D):
         qscore_file = self._getQScoreCSV(baseName)
         attr_file = self._getQScoreATTR(baseName)
         session_file = self._getChimeraSessionFile(baseName)
-
-        with open(py_scriptFile, 'w') as fhCmd:
-            # Open model and map
-            fhCmd.write(
-"""
-from chimerax.atomic import AtomicStructure
-
-structures = [ model for model in session.models.list() if isinstance(model, AtomicStructure) ]
-
-if len(structures) != 1:
-    raise RuntimeError("Expected one atomic structure, found more!")
-
-structure = structures[0]
-                
-for atom in structure.atoms:
-    qscore = getattr(atom, "qscore", None)
-    if qscore is not None:
-        atom.bfactor = float(qscore)
-"""
-            )
             
         with open(cxc_scriptFile, 'w') as fh:
             # Open inputs
@@ -153,8 +134,6 @@ for atom in structure.atoms:
         # Tell ChimeraX to run the script
         args = f"--nogui --nocolor --script {cxc_scriptFile}"
         self.runJob(mapq.Plugin.getChimeraXProgram(), args)
-
-
 
     def createOutputStep(self):
         outStructFileBase = self._getExtraPath('{}.cif')
@@ -181,6 +160,28 @@ for atom in structure.atoms:
             self._defineSourceRelation(pdb, outSet)
 
     # --------------------------- UTILS functions -------------------------------
+    def generateQtoBScript(self):
+        py_scriptFile = self._getChimeraQtoBPythonFile()
+        with open(py_scriptFile, 'w') as fh:
+            # Open model and map
+            fh.write(
+"""
+from chimerax.atomic import AtomicStructure
+
+structures = [ model for model in session.models.list() if isinstance(model, AtomicStructure) ]
+
+if len(structures) != 1:
+    raise RuntimeError("Expected one atomic structure, found more!")
+
+structure = structures[0]
+                
+for atom in structure.atoms:
+    qscore = getattr(atom, "qscore", None)
+    if qscore is not None:
+        atom.bfactor = float(qscore)
+"""
+            )
+    
     def moveOriginTo(self, newOrigin, handler):
         centerMass = handler.centerOfMass(geometric=True)
         for atom in handler.getStructure().get_atoms():
