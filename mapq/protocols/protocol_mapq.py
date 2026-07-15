@@ -248,14 +248,12 @@ export_atom_qscores(session, sys.argv[1])
             # Optional alignment
             if self.autoFit.get():
                 fh.write("volume #2 origin 0,0,0\n")
-                fh.write(f"fitmap #1 inMap #2 resolution 3.0 metric cam shift true rotate true\n")
+                fh.write(f"fitmap #1 inMap #2 resolution {self.mapRes.get()} metric cam shift true rotate true\n")
             # QScore assignment
             fh.write(f"qscore #1 toVolume #2 useGui false assignAttr true logDetails false outputFile {self._getQScoreCSV(baseName)}\n")
-            # Copy qscore to bfactor
-            # fh.write(f"runscript '{abspath(self._getChimeraQtoBPythonFile())}'\n")
             # Generate TSV for Scipion Dictionary generation
             fh.write(f"runscript '{self._getChimeraExportPythonFile()}' '{self._getQScoreTSV(baseName)}'\n")
-            
+            # Write the CIF
             fh.write(f"save {self.pdbOutFile[-1]} models #1\n")
             fh.write(f"save {self._getQScoreATTR(baseName)} attrName a:qscore models #1 modelIds false\n")
             fh.write(f"save {self._getChimeraSessionFile(baseName)}\n")
